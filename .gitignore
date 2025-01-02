@@ -1,0 +1,33 @@
+# Ignore compiled files
+*.bin
+*.elf
+*.hex
+
+# Arduino build folder
+build/
+
+# VS Code files
+.vscode/
+
+# ESP32 specific files
+*.pioenvs/
+*.piolibdeps/
+
+# OS specific files
+.DS_Store
+Thumbs.db
+
+# Ignore libraries added to the project
+Libraries/
+
+# Ignore Wi-Fi credentials and sensitive data
+ESP32/WiFiConfig.h
+
+# Logs and temporary files
+*.log
+*.tmp
+
+# Git ignore for Arduino Sketchbook
+*.bak
+*.swp
+*.swo
