@@ -1,53 +1,36 @@
 #include <WiFi.h>
-#include <WebServer.h>    // Include the WebServer library
 #include <WiFiManager.h>  // Include WiFiManager library
+#include <PubSubClient.h> // Include the MQTT library
 
-// Create a web server object
-WebServer server(80);
+// MQTT Broker details
+const char* mqtt_server = "0.tcp.in.ngrok.io";  // Replace with your MQTT broker address (ngrok or local)
+const int mqtt_port = 15006;  // Replace with your MQTT port (from ngrok or local)
 
-// Function to handle root (landing page)
-void handleRoot() {
-  String html = "<html>"
-                "<head><title>BlueLink</title></head>"
-                "<body>"
-                "<p>Use the following commands to control your devices:</p>"
-                "<ul>"
-                "<li><b>ADD:&lt;pin&gt;</b>: Add a channel connected to the specified pin</li>"
-                "<li><b>REMOVE:&lt;pin&gt;</b>: Remove a channel on the specified pin</li>"
-                "<li><b>SET:&lt;pin&gt;:ON</b>: Turn ON the channel on the specified pin</li>"
-                "<li><b>SET:&lt;pin&gt;:OFF</b>: Turn OFF the channel on the specified pin</li>"
-                "<li><b>LIST</b>: Request a list of active channels</li>"
-                "</ul>"
-                "</body>"
-                "</html>";
-  server.send(200, "text/html", html);
-}
+// Create object for MQTT client
+WiFiClient espClient;
+PubSubClient client(espClient);
 
-// Function to handle POST commands
-void handlePostCommand() {
-  if (server.hasArg("plain")) {  // Check if there is a body in the POST request
-    String command = server.arg("plain");
-    Serial.println(command);  // Send the command to the Arduino via Serial
-
-    // Respond back to the client
-    server.send(200, "text/plain", "Command received: " + command);
-  } else {
-    server.send(400, "text/plain", "Bad Request: No command found in body");
+// MQTT callback function when a message arrives on subscribed topic
+void mqttCallback(char* topic, byte* payload, unsigned int length) {
+  Serial.print("Message arrived on topic: ");
+  Serial.println(topic);
+  Serial.print("Message: ");
+  for (int i = 0; i < length; i++) {
+    Serial.print((char)payload[i]);
   }
+  Serial.println();
+  // Add logic to handle the message and execute commands here
 }
 
 // Function to setup Wi-Fi with WiFiManager and retry connection if necessary
 void setupWiFi() {
   WiFiManager wifiManager;
-
-  // Set up the config portal
   wifiManager.autoConnect("BlueLink Setup");
 
   // After successful connection, display the IP address
   Serial.println("Wi-Fi configuration complete.");
   Serial.println("Attempting to connect...");
 
-  // Retry connection if the ESP32 is not connected after WiFiManager setup
   int attempt = 0;
   while (WiFi.status() != WL_CONNECTED && attempt < 10) {  // Retry up to 5 times
     Serial.print("Attempting to connect to Wi-Fi...");
@@ -64,6 +47,22 @@ void setupWiFi() {
   }
 }
 
+// Function to connect to MQTT server
+void connectMQTT() {
+  while (!client.connected()) {
+    Serial.print("Connecting to MQTT...");
+
+    // Try connecting to the MQTT broker
+    if (client.connect("ESP32Client")) {
+      Serial.println("Connected to MQTT broker!");
+      client.subscribe("test/topic");  // Subscribe to the topic
+    } else {
+      Serial.print("Failed to connect, retrying in 5 seconds...");
+      delay(5000);
+    }
+  }
+}
+
 void setup() {
   Serial.begin(115200);  // Start Serial communication with Arduino
   delay(1000);
@@ -72,16 +71,18 @@ void setup() {
   Serial.println("Connecting to Wi-Fi...");
   setupWiFi();
 
-  // Define routes
-  server.on("/", HTTP_GET, handleRoot);                 // Root landing page
-  server.on("/command", HTTP_POST, handlePostCommand);  // POST command handler
+  // Setup MQTT connection
+  client.setServer(mqtt_server, mqtt_port);
+  client.setCallback(mqttCallback);  // Set the callback function to handle messages
 
-  // Start the server
-  server.begin();
-  Serial.println("HTTP server started");
+  // Connect to MQTT
+  connectMQTT();
 }
 
 void loop() {
-  // Handle incoming HTTP requests
-  server.handleClient();
+  // Ensure MQTT connection stays active
+  if (!client.connected()) {
+    connectMQTT();  // Reconnect to MQTT if disconnected
+  }
+  client.loop();  // Keep the MQTT connection alive and process messages
 }
