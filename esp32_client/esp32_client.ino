@@ -1,9 +1,6 @@
 #include <WiFi.h>
-#include <WebServer.h>  // Include the WebServer library
-
-// Wi-Fi credentials
-const char* ssid = "motorola";
-const char* password = "Hello@123";
+#include <WebServer.h>    // Include the WebServer library
+#include <WiFiManager.h>  // Include WiFiManager library
 
 // Create a web server object
 WebServer server(80);
@@ -39,24 +36,31 @@ void handlePostCommand() {
   }
 }
 
-// Function to ensure Wi-Fi stays connected
-void ensureWiFiConnected() {
-  if (WiFi.status() != WL_CONNECTED) {
-    Serial.println("Wi-Fi disconnected. Attempting to reconnect...");
-    WiFi.begin(ssid, password);
-    int attempt = 0;
-    while (WiFi.status() != WL_CONNECTED && attempt < 10) {  // Retry up to 10 times
-      delay(1000);
-      Serial.print(".");
-      attempt++;
-    }
-    if (WiFi.status() == WL_CONNECTED) {
-      Serial.println("\nReconnected to Wi-Fi!");
-      Serial.println("IP address: ");
-      Serial.println(WiFi.localIP());
-    } else {
-      Serial.println("\nFailed to reconnect to Wi-Fi.");
-    }
+// Function to setup Wi-Fi with WiFiManager and retry connection if necessary
+void setupWiFi() {
+  WiFiManager wifiManager;
+
+  // Set up the config portal
+  wifiManager.autoConnect("BlueLink Setup");
+
+  // After successful connection, display the IP address
+  Serial.println("Wi-Fi configuration complete.");
+  Serial.println("Attempting to connect...");
+
+  // Retry connection if the ESP32 is not connected after WiFiManager setup
+  int attempt = 0;
+  while (WiFi.status() != WL_CONNECTED && attempt < 10) {  // Retry up to 5 times
+    Serial.print("Attempting to connect to Wi-Fi...");
+    delay(5000);
+    attempt++;
+  }
+
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("Connected to Wi-Fi!");
+    Serial.print("IP address: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("Failed to connect to Wi-Fi after multiple attempts.");
   }
 }
 
@@ -64,17 +68,9 @@ void setup() {
   Serial.begin(115200);  // Start Serial communication with Arduino
   delay(1000);
 
+  // Setup Wi-Fi connection using WiFiManager and retry if necessary
   Serial.println("Connecting to Wi-Fi...");
-  WiFi.begin(ssid, password);
-
-  while (WiFi.status() != WL_CONNECTED) {
-    delay(500);
-    Serial.print(".");
-  }
-
-  Serial.println("\nWi-Fi connected!");
-  Serial.println("IP address: ");
-  Serial.println(WiFi.localIP());
+  setupWiFi();
 
   // Define routes
   server.on("/", HTTP_GET, handleRoot);                 // Root landing page
@@ -88,7 +84,4 @@ void setup() {
 void loop() {
   // Handle incoming HTTP requests
   server.handleClient();
-
-  // Ensure Wi-Fi connection stays active
-  ensureWiFiConnected();
 }
