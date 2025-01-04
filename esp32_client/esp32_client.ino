@@ -1,17 +1,21 @@
 #include <WiFi.h>
-#include <WiFiManager.h>   // Include WiFiManager library
-#include <PubSubClient.h>  // Include the MQTT library
+#include <WiFiManager.h>
+#include <PubSubClient.h>
+#include "esp_mac.h"
 
-// MQTT Broker details
-const char* mqtt_server = "0.tcp.in.ngrok.io";  // Replace with your MQTT broker address (ngrok or local)
-const int mqtt_port = 10303;                    // Replace with your MQTT port (from ngrok or local)
+// DuguLink MQTT Broker details
+const char* mqtt_server = "0.tcp.in.ngrok.io";
+const int mqtt_port = 17161;
+const int keepAliveInterval = 60;
+const char* brandPrefix = "dugulink/client/";
+const char* clientPrefix = "DLC";
 
-// Create object for MQTT client
+// Create object for DuguLink MQTT client
 WiFiClient espClient;
 PubSubClient client(espClient);
 
 // Define dynamic variables
-String uniqueId;             // Unique ID for the device
+String clientId;             // Unique ID for the client device
 String commandTopic;         // Topic to receive commands
 String acknowledgmentTopic;  // Topic to send acknowledgments
 
@@ -21,7 +25,7 @@ void logSubscription(const String& topic) {
   Serial.println(topic);
 }
 
-// MQTT callback function when a message arrives on the subscribed topic
+// DuguLink MQTT callback function when a message arrives on the subscribed topic
 void mqttCallback(char* topic, byte* payload, unsigned int length) {
   // Print the received message
   String message = "";
@@ -47,8 +51,12 @@ void mqttCallback(char* topic, byte* payload, unsigned int length) {
 
 // Function to setup Wi-Fi with WiFiManager and retry connection if necessary
 void setupWiFi() {
+  // Get the MAC address and generate device ID
+  clientId = generateClientID();
+  String ssid = "DuguLink Node - " + clientId;
+
   WiFiManager wifiManager;
-  wifiManager.autoConnect("BlueLink Setup");
+  wifiManager.autoConnect(ssid.c_str());
 
   // After successful connection, display the IP address
   Serial.println("Wi-Fi configuration complete.");
@@ -66,28 +74,23 @@ void setupWiFi() {
     Serial.print("IP address: ");
     Serial.println(WiFi.localIP());
 
-    // Get the MAC address and generate unique topics
-    uniqueId = String(WiFi.macAddress());
-    commandTopic = "esp32/device/" + uniqueId + "/commands";
-    acknowledgmentTopic = "esp32/device/" + uniqueId + "/acknowledgments";
-    Serial.print("Device Unique ID: ");
-    Serial.println(uniqueId);
+    // construct topics using device ID
+    commandTopic = brandPrefix + clientId + "/commands";
+    acknowledgmentTopic = brandPrefix + clientId + "/acknowledgments";
   } else {
     Serial.println("Failed to connect to Wi-Fi after multiple attempts.");
   }
 }
 
-// Function to connect to MQTT server
+// Function to connect to DuguLink MQTT broker/server
 void connectMQTT() {
   while (!client.connected()) {
-    Serial.print("Connecting to MQTT...");
+    Serial.print("Connecting to DuguLink MQTT broker...");
 
-    // Use unique ID as the MQTT client ID
-    String clientId = "ESP32-" + uniqueId;
-
-    // Try connecting to the MQTT broker
+    // Use clientId as the DuguLink MQTT client ID
+    // Try connecting to the DuguLink MQTT broker
     if (client.connect(clientId.c_str())) {
-      Serial.println("Connected to MQTT broker!");
+      Serial.println("Connected to DuguLink MQTT broker!");
       // Subscribe to the dynamic command topic
       client.subscribe(commandTopic.c_str());
       logSubscription(commandTopic);
@@ -98,6 +101,22 @@ void connectMQTT() {
   }
 }
 
+// Generate the unique device ID for the client from MAC
+String generateClientID() {
+  uint8_t macSta[6];
+  esp_read_mac(macSta, ESP_MAC_WIFI_STA);  // Get MAC for STA mode from
+
+  // Print the MAC address
+  String macAddressSTA = "";
+  for (int i = 0; i < 6; i++) {
+    macAddressSTA += String(macSta[i], HEX);
+  }
+
+  macAddressSTA.replace(":", "");  // Remove colons
+  macAddressSTA.toUpperCase();     // To uppercase
+  return clientPrefix + macAddressSTA;
+}
+
 void setup() {
   Serial.begin(115200);  // Start Serial communication with Arduino
   delay(1000);
@@ -106,18 +125,19 @@ void setup() {
   Serial.println("Connecting to Wi-Fi...");
   setupWiFi();
 
-  // Setup MQTT connection
+  // Setup DuguLink MQTT connection
   client.setServer(mqtt_server, mqtt_port);
-  client.setCallback(mqttCallback);  // Set the callback function to handle messages
+  client.setCallback(mqttCallback);        // Set the callback function to handle messages
+  client.setKeepAlive(keepAliveInterval);  // Set the keep-alive interval (in seconds)
 
-  // Connect to MQTT
+  // Connect to DuguLink MQTT
   connectMQTT();
 }
 
 void loop() {
-  // Ensure MQTT connection stays active
+  // Ensure DuguLink MQTT connection stays active
   if (!client.connected()) {
-    connectMQTT();  // Reconnect to MQTT if disconnected
+    connectMQTT();  // Reconnect to DuguLink MQTT if disconnected
   }
-  client.loop();  // Keep the MQTT connection alive and process messages
+  client.loop();  // Keep the DuguLink MQTT connection alive and process messages
 }
