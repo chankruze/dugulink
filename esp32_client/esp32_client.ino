@@ -4,8 +4,10 @@
 #include "esp_mac.h"
 
 // DuguLink MQTT Broker details
-const char* mqtt_server = "0.tcp.in.ngrok.io";
-const int mqtt_port = 17161;
+const char* mqtt_server = "mqtt.dugulink.xyz";
+const int mqtt_port = 1883;
+const char* mqtt_user = "ubuntu";  
+const char* mqtt_pass = "chandu";
 const int keepAliveInterval = 60;
 const char* brandPrefix = "dugulink/client/";
 const char* clientPrefix = "DLC";
@@ -89,7 +91,7 @@ void connectMQTT() {
 
     // Use clientId as the DuguLink MQTT client ID
     // Try connecting to the DuguLink MQTT broker
-    if (client.connect(clientId.c_str())) {
+    if (client.connect(clientId.c_str(), mqtt_user, mqtt_pass)) {
       Serial.println("Connected to DuguLink MQTT broker!");
       // Subscribe to the dynamic command topic
       client.subscribe(commandTopic.c_str());
